@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실시간 일정 대시보드 (Google Sheets 연동)</title>
+<style>
+  :root{
+    --bg:#f5f6fa; --card:#ffffff; --border:#e3e5ea; --text:#222; --sub:#777;
+    --primary:#2f5bea; --danger:#e5484d; --warn:#e08e0b; --ok:#2fa84f; --gray:#9aa0ac;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:var(--bg);color:var(--text);}
+  header{background:#1b2a4a;color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  header h1{font-size:18px;margin:0;font-weight:700;}
+  header .sub{font-size:12px;color:#b9c2da;margin-top:2px;}
+  .head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .head-actions .updated{font-size:11px;color:#b9c2da;}
+  main{padding:20px 28px 60px;max-width:1200px;margin:0 auto;}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+  .panel h2{font-size:15px;margin:0 0 12px;}
+  .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:13px;cursor:pointer;}
+  .btn:hover{opacity:.9;}
+  .btn.secondary{background:#eef1f8;color:#333;}
+  .btn.ghost{background:transparent;border:1px solid #3a4a72;color:#cfd8ee;}
+  .btn.ghost:hover{background:rgba(255,255,255,.08);}
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .toolbar input[type=text]{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;min-width:220px;}
+  .toolbar select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;}
+  .settings-box{display:none;margin-top:12px;padding:12px;border:1px dashed var(--border);border-radius:8px;background:#fafbfd;}
+  .settings-box.open{display:block;}
+  .settings-box input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:8px;}
+  .settings-box .hint{font-size:11.5px;color:var(--sub);margin:4px 0 10px;line-height:1.5;}
+  .error-box{background:#fdeceb;border:1px solid #f7c9c7;color:#b3231f;padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;}
+  .empty{color:var(--sub);font-size:13px;padding:24px 0;text-align:center;}
+
+  table.list{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.list th{text-align:left;color:var(--sub);font-weight:600;font-size:12px;padding:8px 10px;border-bottom:2px solid var(--border);}
+  table.list td{padding:10px;border-bottom:1px solid var(--border);}
+  tr.prod-row{cursor:pointer;}
+  tr.prod-row:hover{background:#f7f8fb;}
+  tr.prod-row.expanded{background:#eef1f8;}
+  .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0;}
+  .prod-name-cell{display:flex;align-items:center;font-weight:600;}
+  .caret{display:inline-block;margin-left:6px;font-size:10px;color:var(--sub);transition:transform .15s;}
+  tr.prod-row.expanded .caret{transform:rotate(90deg);}
+  tr.detail-row td{padding:0;border-bottom:1px solid var(--border);background:#fbfbfd;}
+  .detail-wrap{padding:16px 20px 20px;}
+  .detail-wrap h4{font-size:13px;margin:0 0 10px;color:#444;}
+
+  table.milestone{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  table.milestone th{background:#fcfcfd;color:var(--sub);font-weight:600;font-size:11.5px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+  table.milestone td{padding:8px 10px;border-bottom:1px solid var(--border);}
+  table.milestone tr:last-child td{border-bottom:none;}
+  .badge{font-size:10.5px;padding:2px 8px;border-radius:999px;font-weight:700;white-space:nowrap;}
+  .badge.d-urgent{background:#fdeceb;color:var(--danger);}
+  .badge.d-warn{background:#fff4e2;color:var(--warn);}
+  .badge.d-normal{background:#eaf1ff;color:var(--primary);}
+  .badge.d-done{background:#eef0f3;color:var(--gray);}
+  .badge.d-empty{background:#f2f2f4;color:#bbb;}
+
+  .stage-cal-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .stage-cal-toolbar label{font-size:12px;color:var(--sub);}
+  .stage-filter-select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;min-width:180px;}
+  .mini-cal-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  .mini-cal{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;}
+  .mini-cal .mini-title{font-size:12.5px;font-weight:700;text-align:center;margin-bottom:6px;color:#333;}
+  .mini-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .mini-dow{font-size:9.5px;text-align:center;color:var(--sub);padding-bottom:2px;}
+  .mini-dow.dow-sun{color:var(--danger);}
+  .mini-dow.dow-sat{color:var(--primary);}
+  .mini-day{position:relative;aspect-ratio:1/1;border-radius:4px;display:flex;align-items:flex-start;justify-content:flex-start;background:#f4f5f8;}
+  .mini-day.blank{visibility:hidden;}
+  .mini-day.weekend{background:repeating-linear-gradient(45deg,#eef0f4,#eef0f4 3px,#e6e8ee 3px,#e6e8ee 6px);}
+  .mini-day .num{position:relative;z-index:1;font-size:9px;padding:1px 3px;color:#888;}
+  .mini-day.weekend .num{color:#b7bcc7;}
+  .mini-day.has-stage .num{color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.35);font-weight:700;}
+  .mini-day.today{outline:2px solid #1b2a4a;outline-offset:-2px;}
+  .stage-legend{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:12px;font-size:11.5px;color:#555;}
+  .stage-legend .item{display:flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;border:1px solid transparent;cursor:pointer;user-select:none;}
+  .stage-legend .item:hover{background:#f0f1f5;}
+  .stage-legend .item.active{background:#eef1f8;border-color:var(--primary);font-weight:700;color:#222;}
+  .stage-legend .sw{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+  .note{font-size:11px;color:var(--sub);margin:0 0 12px;line-height:1.5;}
+
+  footer{text-align:center;color:var(--sub);font-size:12px;padding:14px 0 30px;line-height:1.7;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>실시간 일정 대시보드</h1>
+    <div class="sub">Google Sheets 연동 · 패키지 디자인 / 상세페이지 / 심의 / 납기 일정 자동 계산</div>
+  </div>
+  <div class="head-actions">
+    <span class="updated" id="updatedAt">불러오는 중...</span>
+    <button class="btn ghost" id="settingsBtn">설정</button>
+    <button class="btn" id="refreshBtn">새로고침</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="panel">
+    <div id="settingsBox" class="settings-box">
+      <label style="font-size:12px;color:var(--sub);">Google 스프레드시트 링크 또는 ID</label>
+      <input type="text" id="sheetUrlInput" placeholder="https://docs.google.com/spreadsheets/d/....../edit">
+      <div class="hint">시트는 [공유] &gt; "링크가 있는 모든 사용자 - 뷰어"로 설정되어 있어야 브라우저에서 바로 조회할 수 있습니다.</div>
+      <button class="btn" id="saveSheetBtn">저장하고 새로고침</button>
+    </div>
+  </div>
+
+  <div id="errorArea"></div>
+
+  <div class="panel">
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="브랜드 / 제품명 / 담당자 검색">
+      <select id="statusFilter"><option value="all">전체 상태</option></select>
+      <span style="font-size:12px;color:var(--sub);" id="countInfo"></span>
+    </div>
+    <div id="listArea"></div>
+  </div>
+
+</main>
+
+<footer>
+  작업요청일 입력 시 영업일(주말 제외) 기준으로 초안완료일 → 출고파일완료일 / 1차 심의접수일(해당 주 금요일) → 심의완료목표일이 자동 계산됩니다.<br>
+  납기예정일은 시트에 입력된 값을 그대로 표시합니다 · 날짜에 연도가 없는 경우(MM/DD) 현재 연도를 기준으로 자동 추정합니다 · 5분마다 자동 새로고침됩니다.
+</footer>
+
+<script>
+// ================= 설정 =================
+const DEFAULT_SHEET_ID = '1EbpAh9FzLNt2nA3M-uFHNtYVePUYJxFUNki6oT8FFBs';
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const BAR_COLORS = ['#4C6EF5','#12B886','#F59F00','#E64980','#7048E8','#FA5252'];
+const STATUS_COLORS = {'완료':'#9aa0ac','진행중':'#2fa84f','개발중':'#2f5bea','제품기획':'#c0399f'};
+
+let products = [];
+let expandedId = null;
+let stageFilters = {}; // productId -> 'all' | index
+let searchTerm = '';
+let statusFilterValue = 'all';
+
+// ================= 날짜/영업일 유틸 =================
+function addDays(d, days){ const nd = new Date(d); nd.setDate(nd.getDate()+days); return nd; }
+function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function fmtKr(d){ return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`; }
+function startOfDay(d){ const nd=new Date(d); nd.setHours(0,0,0,0); return nd; }
+function diffDays(a,b){ return Math.round((startOfDay(a)-startOfDay(b))/86400000); }
+function sameDay(a,b){ return fmt(a)===fmt(b); }
+function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
+function nextWorkingDay(d){ let nd=new Date(d); while(isWeekend(nd)) nd=addDays(nd,1); return nd; }
+function addWorkingDays(date, n){
+  let d = nextWorkingDay(date);
+  let count = 0;
+  while(count < n){ d = addDays(d,1); if(!isWeekend(d)) count++; }
+  return d;
+}
+// date가 속한 주(월~금)의 금요일
+function fridayOfWeek(date){
+  const day = date.getDay(); // 1=월 ... 5=금
+  const offset = 5 - (day===0?7:day);
+  return addDays(date, offset);
+}
+
+// "MM/DD" 형태 문자열을 Date로 변환 (연도 없음 -> 현재 연도 추정, 10~12월 기준일 때 1~3월 대상이면 다음해로 보정)
+function parseFlexDate(raw, today){
+  if(!raw) return null;
+  const s = String(raw).trim();
+  if(!s || s === '-') return null;
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if(!m) return null;
+  const month = parseInt(m[1],10), day = parseInt(m[2],10);
+  if(month<1||month>12||day<1||day>31) return null;
+  let year = today.getFullYear();
+  if(today.getMonth()+1 >= 10 && month <= 3) year += 1;
+  return new Date(year, month-1, day);
+}
+
+function parseDeliveryField(raw, today){
+  const s = (raw||'').trim();
+  if(!s || s === '-') return {date:null, text:null};
+  const d = parseFlexDate(s, today);
+  if(d) return {date:d, text:null};
+  return {date:null, text:s};
+}
+
+// ================= CSV 파싱 =================
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field=''; }
+      else if(c === '\r'){ /* skip */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else field += c;
+    }
+  }
+  if(field.length>0 || row.length>0){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function extractSheetId(input){
+  const s = (input||'').trim();
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if(m) return m[1];
+  return s;
+}
+function getSheetId(){ return localStorage.getItem('live_dash_sheet_id') || DEFAULT_SHEET_ID; }
+function setSheetId(v){ localStorage.setItem('live_dash_sheet_id', extractSheetId(v)); }
+function buildCsvUrl(sheetId){ return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&_=${Date.now()}`; }
+
+function parseSheetCsv(text){
+  const rows = parseCSV(text);
+  const dataRows = rows.slice(2); // 1행: 장식용 빈행, 2행: 헤더
+  const list = [];
+  dataRows.forEach((r, idx) => {
+    const productName = (r[4]||'').trim();
+    if(!productName) return;
+    list.push({
+      id: 'row_'+idx,
+      no: (r[1]||'').trim(),
+      brand: (r[2]||'').trim(),
+      manager: (r[3]||'').trim(),
+      productName,
+      status: (r[5]||'').trim(),
+      priority: (r[6]||'').trim(),
+      designRequestRaw: (r[7]||'').trim(),
+      detailRequestRaw: (r[9]||'').trim(),
+      deliveryRaw: (r[12]||'').trim(),
+    });
+  });
+  return list;
+}
+
+// ================= 파생 일정 계산 =================
+function computeSchedule(p, today){
+  const designRequest = parseFlexDate(p.designRequestRaw, today);
+  const draftComplete1 = designRequest ? addWorkingDays(designRequest, 10) : null;
+  const shipFileComplete = draftComplete1 ? addWorkingDays(draftComplete1, 10) : null;
+
+  const detailRequest = parseFlexDate(p.detailRequestRaw, today);
+  const draftComplete2 = detailRequest ? addWorkingDays(detailRequest, 10) : null;
+  const firstReview = draftComplete2 ? fridayOfWeek(draftComplete2) : null;
+  const reviewComplete = firstReview ? addWorkingDays(firstReview, 20) : null;
+
+  const delivery = parseDeliveryField(p.deliveryRaw, today);
+
+  return {designRequest, draftComplete1, shipFileComplete, detailRequest, draftComplete2, firstReview, reviewComplete, delivery};
+}
+
+function buildSegments(s){
+  const segs = [];
+  if(s.designRequest && s.draftComplete1) segs.push({name:'패키지 디자인 작업', start:s.designRequest, end:s.draftComplete1, color:BAR_COLORS[0]});
+  if(s.draftComplete1 && s.shipFileComplete) segs.push({name:'출고파일 준비', start:s.draftComplete1, end:s.shipFileComplete, color:BAR_COLORS[1]});
+  if(s.detailRequest && s.draftComplete2) segs.push({name:'상세페이지 작업', start:s.detailRequest, end:s.draftComplete2, color:BAR_COLORS[2]});
+  if(s.firstReview) segs.push({name:'1차 심의 접수일', start:s.firstReview, end:s.firstReview, color:BAR_COLORS[3]});
+  if(s.firstReview && s.reviewComplete) segs.push({name:'심의 진행', start:s.firstReview, end:s.reviewComplete, color:BAR_COLORS[4]});
+  if(s.delivery.date) segs.push({name:'납기예정일', start:s.delivery.date, end:s.delivery.date, color:BAR_COLORS[5]});
+  return segs;
+}
+
+function dateBadge(date, text, today){
+  if(!date){
+    if(text) return {cls:'d-normal', text: text};
+    return {cls:'d-empty', text:'미입력'};
+  }
+  const d = diffDays(date, today);
+  if(d < 0) return {cls:'d-done', text:`완료 (${fmtKr(date)})`};
+  if(d === 0) return {cls:'d-urgent', text:'오늘'};
+  if(d <= 3) return {cls:'d-urgent', text:`D-${d}`};
+  if(d <= 7) return {cls:'d-warn', text:`D-${d}`};
+  return {cls:'d-normal', text:`D-${d}`};
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ================= 캘린더 렌더 (세그먼트 하이라이트) =================
+function stripesBackground(colors){
+  if(colors.length===0) return null;
+  if(colors.length===1) return colors[0];
+  const step = 100/colors.length;
+  const stops = colors.map((c,i)=>`${c} ${i*step}%, ${c} ${(i+1)*step}%`).join(', ');
+  return `linear-gradient(to right, ${stops})`;
+}
+function activeSegsForDate(visibleSegs, dateObj, dateStr){
+  if(isWeekend(dateObj)) return [];
+  return visibleSegs.filter(s => dateStr >= fmt(s.start) && dateStr <= fmt(s.end));
+}
+function buildMonthMini(year, month, visibleSegs, today){
+  const dow = ['일','월','화','수','목','금','토'];
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  let cells = '';
+  for(let i=0;i<firstDow;i++) cells += '<div class="mini-day blank"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const dateObj = new Date(year, month, d);
+    const dateStr = fmt(dateObj);
+    const weekend = isWeekend(dateObj);
+    const active = activeSegsForDate(visibleSegs, dateObj, dateStr);
+    const bg = weekend ? null : stripesBackground(active.map(s=>s.color));
+    const isToday = sameDay(dateObj, today);
+    const titleTxt = weekend ? '주말' : active.map(s=>s.name).join(', ');
+    const styleAttr = bg ? ` style="background:${bg}"` : '';
+    const cls = ['mini-day'];
+    if(active.length) cls.push('has-stage');
+    if(weekend) cls.push('weekend');
+    if(isToday) cls.push('today');
+    cells += `<div class="${cls.join(' ')}"${styleAttr} title="${escapeHtml(titleTxt)}"><span class="num">${d}</span></div>`;
+  }
+  const totalCells = firstDow + daysInMonth;
+  const remain = (7 - (totalCells % 7)) % 7;
+  for(let i=0;i<remain;i++) cells += '<div class="mini-day blank"></div>';
+  const dowRow = dow.map((x,i)=>`<div class="mini-dow ${i===0?'dow-sun':''} ${i===6?'dow-sat':''}">${x}</div>`).join('');
+  return `<div class="mini-cal">
+    <div class="mini-title">${year}.${String(month+1).padStart(2,'0')}</div>
+    <div class="mini-cal-grid">${dowRow}${cells}</div>
+  </div>`;
+}
+function renderSegmentCalendar(segs, today, productId){
+  if(segs.length===0){
+    return '<p class="note">계산 가능한 일정이 없습니다 (작업요청일이 입력되지 않았습니다).</p>';
+  }
+  const filter = stageFilters[productId] ?? 'all';
+  const visibleSegs = filter==='all' ? segs : segs.filter((s,i)=>i===filter);
+
+  const allStarts = segs.map(s=>s.start), allEnds = segs.map(s=>s.end);
+  const first = new Date(Math.min(...allStarts.map(d=>d.getTime())));
+  const last = new Date(Math.max(...allEnds.map(d=>d.getTime())));
+  const months = [];
+  let cursor = new Date(first.getFullYear(), first.getMonth(), 1);
+  const endCursor = new Date(last.getFullYear(), last.getMonth(), 1);
+  let guard = 0;
+  while(cursor <= endCursor && guard < 24){
+    months.push(buildMonthMini(cursor.getFullYear(), cursor.getMonth(), visibleSegs, today));
+    cursor.setMonth(cursor.getMonth()+1);
+    guard++;
+  }
+  const options = [`<option value="all" ${filter==='all'?'selected':''}>전체 구간 보기</option>`]
+    .concat(segs.map((s,i)=>`<option value="${i}" ${filter===i?'selected':''}>${i+1}. ${s.name}</option>`))
+    .join('');
+  const legend = segs.map((s,i)=>{
+    const active = filter===i ? 'active' : '';
+    return `<div class="item ${active}" onclick="setStageFilter('${productId}', ${i})">
+      <span class="sw" style="background:${s.color}"></span>${escapeHtml(s.name)}
+    </div>`;
+  }).join('');
+
+  return `<div class="stage-cal-toolbar">
+      <label>구간 선택</label>
+      <select class="stage-filter-select" onchange="setStageFilter('${productId}', this.value)">${options}</select>
+      ${filter!=='all' ? `<button class="btn secondary" style="padding:6px 12px;" onclick="setStageFilter('${productId}', 'all')">전체 보기로 돌아가기</button>` : ''}
+    </div>
+    <div class="mini-cal-row">${months.join('')}</div>
+    <div class="stage-legend">${legend}</div>`;
+}
+
+function setStageFilter(productId, value){
+  stageFilters[productId] = (value === 'all') ? 'all' : Number(value);
+  renderList();
+}
+window.setStageFilter = setStageFilter;
+
+// ================= 목록/상세 렌더 =================
+function toggleExpand(id){
+  expandedId = (expandedId === id) ? null : id;
+  renderList();
+}
+window.toggleExpand = toggleExpand;
+
+function renderDetail(p, today){
+  const sched = computeSchedule(p, today);
+  const segs = buildSegments(sched);
+  const rows = [
+    ['패키지 디자인 작업요청일', sched.designRequest, null],
+    ['패키지 디자인 초안 작성 완료일', sched.draftComplete1, null],
+    ['출고파일 완료일', sched.shipFileComplete, null],
+    ['상세페이지 작업요청일', sched.detailRequest, null],
+    ['상세페이지 초안 작성 완료일', sched.draftComplete2, null],
+    ['상세페이지 1차 심의 접수일', sched.firstReview, null],
+    ['심의 완료 목표일', sched.reviewComplete, null],
+    ['납기예정일', sched.delivery.date, sched.delivery.text],
+  ];
+  const trs = rows.map(([label, date, text])=>{
+    const b = dateBadge(date, text, today);
+    const dateTxt = date ? fmtKr(date) : (text || '-');
+    return `<tr><td>${label}</td><td>${dateTxt}</td><td><span class="badge ${b.cls}">${b.text}</span></td></tr>`;
+  }).join('');
+
+  return `<div class="detail-wrap">
+    <h4>${escapeHtml(p.productName)} · 상세 일정</h4>
+    <table class="milestone">
+      <thead><tr><th>항목</th><th>날짜</th><th>상태</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>
+    ${renderSegmentCalendar(segs, today, p.id)}
+  </div>`;
+}
+
+function renderList(){
+  const listArea = document.getElementById('listArea');
+  const today = new Date();
+
+  let filtered = products.filter(p=>{
+    if(statusFilterValue !== 'all' && p.status !== statusFilterValue) return false;
+    if(searchTerm){
+      const t = searchTerm.toLowerCase();
+      if(!(p.brand.toLowerCase().includes(t) || p.productName.toLowerCase().includes(t) || p.manager.toLowerCase().includes(t))) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('countInfo').textContent = `${filtered.length}개 제품 표시 중 (전체 ${products.length}개)`;
+
+  if(filtered.length === 0){
+    listArea.innerHTML = '<div class="empty">표시할 제품이 없습니다.</div>';
+    return;
+  }
+
+  const bodyRows = filtered.map(p=>{
+    const dotColor = STATUS_COLORS[p.status] || '#c7cad1';
+    const isOpen = expandedId === p.id;
+    const summaryRow = `<tr class="prod-row ${isOpen?'expanded':''}" onclick="toggleExpand('${p.id}')">
+      <td>${escapeHtml(p.brand)}</td>
+      <td><div class="prod-name-cell"><span class="status-dot" style="background:${dotColor}"></span>${escapeHtml(p.productName)}<span class="caret">▶</span></div></td>
+      <td>${escapeHtml(p.manager)}</td>
+    </tr>`;
+    const detailRow = isOpen ? `<tr class="detail-row"><td colspan="3">${renderDetail(p, today)}</td></tr>` : '';
+    return summaryRow + detailRow;
+  }).join('');
+
+  listArea.innerHTML = `<table class="list">
+    <thead><tr><th style="width:22%;">브랜드</th><th>제품명</th><th style="width:16%;">담당자</th></tr></thead>
+    <tbody>${bodyRows}</tbody>
+  </table>`;
+}
+
+function populateStatusFilter(){
+  const sel = document.getElementById('statusFilter');
+  const statuses = Array.from(new Set(products.map(p=>p.status).filter(Boolean)));
+  sel.innerHTML = '<option value="all">전체 상태</option>' + statuses.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  sel.value = statusFilterValue;
+}
+
+// ================= 데이터 로드 =================
+function showError(msg){
+  document.getElementById('errorArea').innerHTML = `<div class="error-box">${escapeHtml(msg)}</div>`;
+}
+function clearError(){ document.getElementById('errorArea').innerHTML = ''; }
+
+async function loadAndRender(){
+  try{
+    document.getElementById('updatedAt').textContent = '불러오는 중...';
+    const sheetId = getSheetId();
+    const res = await fetch(buildCsvUrl(sheetId));
+    if(!res.ok) throw new Error('시트 응답 오류 (상태 코드 ' + res.status + ')');
+    const text = await res.text();
+    products = parseSheetCsv(text);
+    expandedId = null;
+    clearError();
+    populateStatusFilter();
+    renderList();
+    document.getElementById('updatedAt').textContent = '마지막 업데이트: ' + new Date().toLocaleTimeString('ko-KR');
+  } catch(e){
+    showError('구글 시트를 불러오지 못했습니다. 시트가 "링크가 있는 모든 사용자 - 뷰어"로 공유되어 있는지 확인해주세요. (' + e.message + ')');
+    document.getElementById('updatedAt').textContent = '업데이트 실패';
+  }
+}
+
+// ================= 이벤트 바인딩 =================
+document.getElementById('refreshBtn').addEventListener('click', loadAndRender);
+document.getElementById('settingsBtn').addEventListener('click', ()=>{
+  const box = document.getElementById('settingsBox');
+  box.classList.toggle('open');
+  if(box.classList.contains('open')){
+    document.getElementById('sheetUrlInput').value = 'https://docs.google.com/spreadsheets/d/' + getSheetId() + '/edit';
+  }
+});
+document.getElementById('saveSheetBtn').addEventListener('click', ()=>{
+  const val = document.getElementById('sheetUrlInput').value.trim();
+  if(!val){ alert('시트 링크 또는 ID를 입력하세요.'); return; }
+  setSheetId(val);
+  document.getElementById('settingsBox').classList.remove('open');
+  loadAndRender();
+});
+document.getElementById('searchInput').addEventListener('input', (e)=>{ searchTerm = e.target.value; renderList(); });
+document.getElementById('statusFilter').addEventListener('change', (e)=>{ statusFilterValue = e.target.value; renderList(); });
+
+loadAndRender();
+setInterval(loadAndRender, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>
